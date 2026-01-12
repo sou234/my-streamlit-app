@@ -2,5 +2,6 @@ streamlit
 pandas
 plotly
 finance-datareader
-pykrx
-setuptools
+requests
+beautifulsoup4
+lxml
