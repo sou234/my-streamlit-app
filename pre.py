@@ -89,7 +89,8 @@ def get_timefolio_data_ultimate(idx):
                 df.columns = [str(c).strip() for c in df.columns]
                 name_col = next((c for c in df.columns if "종목명" in c), None)
                 weight_col = next((c for c in df.columns if "비중" in c), None)
-                change_col = next((c for c in df.columns if any(k in c for k in ["대비", "증감", "전일"])), None)
+                # '등락' 키워드 추가하여 검색 범위 확대
+                change_col = next((c for c in df.columns if any(k in c for k in ["대비", "증감", "전일", "등락"])), None)
                 
                 if name_col and weight_col:
                     cols_to_show = [name_col, weight_col]
@@ -189,29 +190,33 @@ elif menu == "📊 타임폴리오 실시간 PDF":
             # --- [신규 기능: 리밸런싱 요약] ---
             st.subheader("🔄 리밸런싱 요약 (전일 대비)")
             
-            # 요약 수치 계산
-            increased = df[df["증감"] > 0]
-            decreased = df[df["증감"] < 0]
-            new_in = df[df["비중(%)"] == df["증감"]] # 현재 비중과 증감이 같으면 신규 편입으로 간주
-            
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("비중 확대", f"{len(increased)} 종목", delta=f"{len(increased)}", delta_color="normal")
-            m2.metric("비중 축소", f"{len(decreased)} 종목", delta=f"-{len(decreased)}", delta_color="inverse")
-            m3.metric("신규 편입", f"{len(new_in)} 종목")
-            m4.metric("편출/기타", "-")
+            # '증감' 데이터가 있는지 확인 후 처리
+            if "증감" in df.columns:
+                # 요약 수치 계산
+                increased = df[df["증감"] > 0]
+                decreased = df[df["증감"] < 0]
+                new_in = df[df["비중(%)"] == df["증감"]] # 현재 비중과 증감이 같으면 신규 편입으로 간주
+                
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("비중 확대", f"{len(increased)} 종목", delta=f"{len(increased)}", delta_color="normal")
+                m2.metric("비중 축소", f"{len(decreased)} 종목", delta=f"-{len(decreased)}", delta_color="inverse")
+                m3.metric("신규 편입", f"{len(new_in)} 종목")
+                m4.metric("편출/기타", "-")
 
-            # 상세 내역 (비중 확대 종목 수치 비교)
-            if not increased.empty:
-                st.markdown("#### 🚀 주요 비중 확대 종목 (상세)")
-                for _, row in increased.iterrows():
-                    prev_w = round(row["비중(%)"] - row["증감"], 2)
-                    curr_w = round(row["비중(%)"], 2)
-                    change = round(row["증감"], 2)
-                    st.write(f"- **{row['종목명']}**: {prev_w}% → {curr_w}% (**+{change}%**)")
+                # 상세 내역 (비중 확대 종목 수치 비교)
+                if not increased.empty:
+                    st.markdown("#### 🚀 주요 비중 확대 종목 (상세)")
+                    for _, row in increased.iterrows():
+                        prev_w = round(row["비중(%)"] - row["증감"], 2)
+                        curr_w = round(row["비중(%)"], 2)
+                        change = round(row["증감"], 2)
+                        st.write(f"- **{row['종목명']}**: {prev_w}% → {curr_w}% (**+{change}%**)")
+            else:
+                st.warning("⚠️ '증감' 데이터를 불러오지 못해 리밸런싱 요약 기능을 제공할 수 없습니다. (기본 포트폴리오는 아래에 표시됩니다)")
             
             st.markdown("---")
             
-            # 기존 테이블 및 차트
+            # 기존 테이블 및 차트 (증감 데이터 없어도 출력)
             l, r = st.columns([1, 1.2])
             with l:
                 st.subheader("📍 포트폴리오 비중")
@@ -220,15 +225,25 @@ elif menu == "📊 타임폴리오 실시간 PDF":
                 st.plotly_chart(fig, use_container_width=True)
             with r:
                 st.subheader("📋 전체 TOP 10 상세")
-                # 스타일링 (증감에 따른 색상)
-                def color_change(val):
-                    color = 'red' if val > 0 else 'blue' if val < 0 else 'black'
-                    return f'color: {color}'
                 
-                st.dataframe(df.style.applymap(color_change, subset=['증감']), 
-                             use_container_width=True, height=400)
+                # '증감' 컬럼이 있을 때만 색상 적용
+                if "증감" in df.columns:
+                    def color_change(val):
+                        if not isinstance(val, (int, float)): return 'color: black'
+                        color = 'red' if val > 0 else 'blue' if val < 0 else 'black'
+                        return f'color: {color}'
+                    
+                    try:
+                        st.dataframe(df.style.map(color_change, subset=['증감']), 
+                                     use_container_width=True, height=400)
+                    except:
+                        # pandas 버전 호환성 문제시 기본 표시
+                        st.dataframe(df, use_container_width=True, height=400)
+                else:
+                    st.dataframe(df, use_container_width=True, height=400)
         else:
             st.error("❌ 데이터를 가져오는 데 실패했습니다.")
 
     st.markdown("---")
     st.link_button("🌐 공식 상세페이지 바로가기", f"https://timefolioetf.co.kr/m11_view.php?idx={target_idx}")
+
