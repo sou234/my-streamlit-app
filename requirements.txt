@@ -4,4 +4,5 @@ plotly
 finance-datareader
 requests
 beautifulsoup4
-lxml
+yfinance
+pytz
